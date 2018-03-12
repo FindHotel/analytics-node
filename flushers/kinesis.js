@@ -2,13 +2,12 @@
 
 const { Kinesis } = require('aws-sdk')
 const RecordAggregator = require('aws-kinesis-agg/RecordAggregator')
-
 const aggregator = new RecordAggregator()
-const kinesis = new Kinesis()
 
 class KinesisFlusher {
-  constructor (host) {
+  constructor (host, awsCredentials) {
     this.host = host
+    this.kinesis = new Kinesis(awsCredentials)
   }
 
   /**
@@ -29,7 +28,7 @@ class KinesisFlusher {
       StreamName: this.host
     }
 
-    kinesis.putRecord(params, function (err, data) {
+    this.kinesis.putRecord(params, function (err, data) {
       if (err) callback(err)
       else callback()
     })

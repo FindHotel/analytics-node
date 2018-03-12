@@ -260,7 +260,7 @@ class Analytics {
       const httpFlush = new HTTPFlusher(this.host, this.writeKey, this.timeout)
       httpFlush.call(data, done)
     } else if (this.flushMethod === 'kinesis') {
-      const kinesisFlush = new KinesisFlusher(this.host)
+      const kinesisFlush = new KinesisFlusher(this.host, this.writeKey)
       kinesisFlush.call(data, done)
     } else {
       done(new Error('Flush Method not available!'))
