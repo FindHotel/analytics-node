@@ -3,6 +3,7 @@
 const { Kinesis } = require('aws-sdk')
 const RecordAggregator = require('aws-kinesis-agg/RecordAggregator')
 const aggregator = new RecordAggregator()
+const noop = () => {}
 
 class KinesisFlusher {
   constructor (host, awsCredentials) {
@@ -59,7 +60,12 @@ class KinesisFlusher {
 
     // The callback is envoked when the number of records supplied
     // exceeds the Kinesis maximum record size
-    aggregator.aggregateRecords(kinesisMessages, this.sendMessageToKinesis.bind(this, callback))
+    aggregator.aggregateRecords(
+      kinesisMessages,
+      this.sendMessageToKinesis.bind(this, callback),
+      noop,
+      noop
+    )
 
     // flush any final messages that were under the emission threshold
     aggregator.flushBufferedRecords(this.sendMessageToKinesis.bind(this, callback))
