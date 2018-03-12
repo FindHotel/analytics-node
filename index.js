@@ -3,21 +3,15 @@
 const assert = require('assert')
 const removeSlash = require('remove-trailing-slash')
 const looselyValidate = require('@segment/loosely-validate-event')
-const axios = require('axios')
-const axiosRetry = require('axios-retry')
-const ms = require('ms')
 const uuid = require('uuid/v4')
 const md5 = require('md5')
 const crypto = require('crypto')
 
-// Kinesis
-const { Kinesis } = require('aws-sdk')
-const RecordAggregator = require('aws-kinesis-agg/RecordAggregator')
-const aggregator = new RecordAggregator()
-const kinesis = new Kinesis()
-
 const version = require('./package.json').version
 const isString = require('lodash.isstring')
+
+const HTTPFlusher = require('./flushers/http')
+const KinesisFlusher = require('./flushers/kinesis')
 
 const setImmediate = global.setImmediate || process.nextTick.bind(process)
 const noop = () => {}
@@ -56,11 +50,6 @@ class Analytics {
       writable: false,
       enumerable: true,
       value: typeof options.enable === 'boolean' ? options.enable : true
-    })
-
-    axiosRetry(axios, {
-      retries: options.retryCount || 3,
-      retryCondition: this._isErrorRetryable
     })
   }
 
@@ -268,117 +257,14 @@ class Analytics {
     }
 
     if (this.flushMethod === 'http') {
-      this.httpFlush(data, done)
+      const httpFlush = new HTTPFlusher(this.host, this.writeKey, this.timeout)
+      httpFlush.call(data, done)
     } else if (this.flushMethod === 'kinesis') {
-      this.kinesisFlush(data, done)
+      const kinesisFlush = new KinesisFlusher(this.host)
+      kinesisFlush.call(data, done)
     } else {
       done(new Error('Flush Method not available!'))
     }
-
-  }
-
-  // Callback called by the aggregate function that send messages to Kinesis
-  sendMessageToKinesis (err, encodedMessage) {
-    const params = {
-      Data: encodedMessage.Data,
-      PartitionKey: encodedMessage.PartitionKey,
-      ExplicitHashKey: encodedMessage.ExplicitHashKey,
-      StreamName: this.host
-    }
-
-    kinesis.putRecord(params, function(err, data) {
-      if (err) console.log(err, err.stack);
-      else     console.log(data);
-    })
-  }
-
-  kinesisFlush (data, done) {
-    const kinesisMessages = data.batch.map((record) => {
-      var pk = (1.0 * Math.random()).toString().replace('.', '');
-      var ehk = (1.0 * Math.random()).toString().replace('.', '');
-
-      while (ehk[0] === '0' && ehk.length > 0) {
-        ehk = ehk.substring(1);
-      }
-
-      return {
-        'PartitionKey' : pk,
-        'ExplicitHashKey' : ehk,
-        'Data' : JSON.stringify(record)
-      };
-    });
-
-    // The callback is envoked when the number of records supplied
-    // exceeds the Kinesis maximum record size
-    aggregator.aggregateRecords(kinesisMessages, this.sendMessageToKinesis.bind(this))
-
-    // flush any final messages that were under the emission threshold
-    aggregator.flushBufferedRecords(this.sendMessageToKinesis.bind(this))
-
-    done()
-  }
-
-  httpFlush (data, done) {
-    // Don't set the user agent if we're not on a browser. The latest spec allows
-    // the User-Agent header (see https://fetch.spec.whatwg.org/#terminology-headers
-    // and https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/setRequestHeader),
-    // but browsers such as Chrome and Safari have not caught up.
-    const headers = {
-      'user-agent': `analytics-node ${version}`,
-      'x-api-key': this.writeKey
-    }
-
-    if (typeof window === 'undefined') {
-      headers['user-agent'] = `analytics-node/${version}`
-    }
-
-    const req = {
-      method: 'POST',
-      url: `${this.host}/v1/import`,
-      auth: {
-        username: this.writeKey
-      },
-      data,
-      headers
-    }
-
-    if (this.timeout) {
-      req.timeout = typeof this.timeout === 'string' ? ms(this.timeout) : this.timeout
-    }
-    axios(req)
-      .then(() => done())
-      .catch(err => {
-        if (err.response) {
-          const error = new Error(err.response.statusText)
-          return done(error)
-        }
-
-        done(err)
-      })
-  }
-
-  _isErrorRetryable (error) {
-    // Retry Network Errors.
-    if (axiosRetry.isNetworkError(error)) {
-      return true
-    }
-
-    if (!error.response) {
-      // Cannot determine if the request can be retried
-      return false
-    }
-
-    // Retry Server Errors (5xx).
-    if (error.response.status >= 500 && error.response.status <= 599) {
-      return true
-    }
-
-    // Retry if rate limited.
-    if (error.response.status === 429) {
-      return true
-    }
-
-    return false
   }
 }
 
