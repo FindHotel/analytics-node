@@ -31,6 +31,8 @@
   },
   "files": [
     "index.js",
+    "flushers/*",
+    "index.js",
     "cli.js"
   ],
   "keywords": [
