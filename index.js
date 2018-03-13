@@ -18,10 +18,10 @@ const noop = () => {}
 
 class Analytics {
   /**
-   * Initialize a new `Analytics` with your Segment project's `writeKey` and an
+   * Initialize a new `Analytics` with your Segment project's `credentials` and an
    * optional dictionary of `options`.
    *
-   * @param {String} writeKey
+   * @param {String} credentials
    * @param {Object} [options] (optional)
    *   @property {Number} flushAt (default: 20)
    *   @property {Number} flushInterval (default: 10000)
@@ -30,13 +30,13 @@ class Analytics {
    *   @property {Boolean} enable (default: true)
    */
 
-  constructor (writeKey, options) {
+  constructor (credentials, options) {
     options = options || {}
 
-    assert(writeKey, 'You must pass your Segment project\'s write key.')
+    assert(credentials, 'You must pass your credentials according to the flush method you are using.')
 
     this.queue = []
-    this.writeKey = writeKey
+    this.credentials = credentials
     this.anonymousId = options.anonymousId || crypto.createHash('md5').update(Date.now() + '').digest('hex')
 
     this.host = removeSlash(options.host || 'https://api.segment.io')
@@ -257,10 +257,10 @@ class Analytics {
     }
 
     if (this.flushMethod === 'http') {
-      const httpFlush = new HTTPFlusher(this.host, this.writeKey, this.timeout)
+      const httpFlush = new HTTPFlusher(this.host, this.credentials, this.timeout)
       httpFlush.call(data, done)
     } else if (this.flushMethod === 'kinesis') {
-      const kinesisFlush = new KinesisFlusher(this.host, this.writeKey)
+      const kinesisFlush = new KinesisFlusher(this.host, this.credentials)
       kinesisFlush.call(data, done)
     } else {
       done(new Error('Flush Method not available!'))
