@@ -23,6 +23,28 @@ client.track({
 });
 ```
 
+### Sending events via Kinesis (KPL)
+
+For sending events via kinesis you need to set the `flushMethod` option as `kinesis` and the `host` option with the name of your stream.
+
+And if you need to authenticate on code level, you can send an object with your aws credentials on the first parameter (you can send an empty object if don't need it).
+
+Example:
+
+```js
+const Analytics = require('analytics-node');
+
+const awsCredentials = {
+  accessKeyId: 'xxx',
+  secretAccessKey: 'xxxx'
+};
+
+const client = new Analytics(awsCredentials, {
+  host: 'MyStramName',
+  flushMethod: 'kinesis'
+});
+
+```
 
 ## Documentation
 

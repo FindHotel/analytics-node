@@ -3,56 +3,53 @@
 const assert = require('assert')
 const removeSlash = require('remove-trailing-slash')
 const looselyValidate = require('@segment/loosely-validate-event')
-const axios = require('axios')
-const axiosRetry = require('axios-retry')
-const ms = require('ms')
 const uuid = require('uuid/v4')
 const md5 = require('md5')
-var crypto = require('crypto')
+const crypto = require('crypto')
 
 const version = require('./package.json').version
 const isString = require('lodash.isstring')
+
+const HTTPFlusher = require('./flushers/http')
+const KinesisFlusher = require('./flushers/kinesis')
 
 const setImmediate = global.setImmediate || process.nextTick.bind(process)
 const noop = () => {}
 
 class Analytics {
   /**
-   * Initialize a new `Analytics` with your Segment project's `writeKey` and an
+   * Initialize a new `Analytics` with your Segment project's `credentials` and an
    * optional dictionary of `options`.
    *
-   * @param {String} writeKey
+   * @param {String} credentials
    * @param {Object} [options] (optional)
    *   @property {Number} flushAt (default: 20)
    *   @property {Number} flushInterval (default: 10000)
+   *   @property {Number} flushMethod (default: 'http')
    *   @property {String} host (default: 'https://api.segment.io')
    *   @property {Boolean} enable (default: true)
    */
 
-  constructor (writeKey, options) {
+  constructor (credentials, options) {
     options = options || {}
 
-    assert(writeKey, 'You must pass your Segment project\'s write key.')
+    assert(credentials, 'You must pass your credentials according to the flush method you are using.')
 
     this.queue = []
-    this.writeKey = writeKey
+    this.credentials = credentials
     this.anonymousId = options.anonymousId || crypto.createHash('md5').update(Date.now() + '').digest('hex')
 
     this.host = removeSlash(options.host || 'https://api.segment.io')
     this.timeout = options.timeout || false
     this.flushAt = Math.max(options.flushAt, 1) || 20
     this.flushInterval = options.flushInterval || 10000
+    this.flushMethod = options.flushMethod || 'http'
     this.flushed = false
     Object.defineProperty(this, 'enable', {
       configurable: false,
       writable: false,
       enumerable: true,
       value: typeof options.enable === 'boolean' ? options.enable : true
-    })
-
-    axiosRetry(axios, {
-      retries: options.retryCount || 3,
-      retryCondition: this._isErrorRetryable
     })
   }
 
@@ -259,66 +256,15 @@ class Analytics {
       callback(err, data)
     }
 
-    // Don't set the user agent if we're not on a browser. The latest spec allows
-    // the User-Agent header (see https://fetch.spec.whatwg.org/#terminology-headers
-    // and https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/setRequestHeader),
-    // but browsers such as Chrome and Safari have not caught up.
-    const headers = {
-      'user-agent': `analytics-node ${version}`,
-      'x-api-key': this.writeKey
+    if (this.flushMethod === 'http') {
+      const httpFlush = new HTTPFlusher(this.host, this.credentials, this.timeout)
+      httpFlush.call(data, done)
+    } else if (this.flushMethod === 'kinesis') {
+      const kinesisFlush = new KinesisFlusher(this.host, this.credentials)
+      kinesisFlush.call(data, done)
+    } else {
+      done(new Error('Flush Method not available!'))
     }
-
-    if (typeof window === 'undefined') {
-      headers['user-agent'] = `analytics-node/${version}`
-    }
-
-    const req = {
-      method: 'POST',
-      url: `${this.host}/v1/import`,
-      auth: {
-        username: this.writeKey
-      },
-      data,
-      headers
-    }
-
-    if (this.timeout) {
-      req.timeout = typeof this.timeout === 'string' ? ms(this.timeout) : this.timeout
-    }
-    axios(req)
-      .then(() => done())
-      .catch(err => {
-        if (err.response) {
-          const error = new Error(err.response.statusText)
-          return done(error)
-        }
-
-        done(err)
-      })
-  }
-
-  _isErrorRetryable (error) {
-    // Retry Network Errors.
-    if (axiosRetry.isNetworkError(error)) {
-      return true
-    }
-
-    if (!error.response) {
-      // Cannot determine if the request can be retried
-      return false
-    }
-
-    // Retry Server Errors (5xx).
-    if (error.response.status >= 500 && error.response.status <= 599) {
-      return true
-    }
-
-    // Retry if rate limited.
-    if (error.response.status === 429) {
-      return true
-    }
-
-    return false
   }
 }
 
