@@ -17,7 +17,7 @@ class KinesisFlusher {
    *
    * @param {Function} [callback]
    * @param {Object} err
-   * @param {Object} [encodedMessage] { Data, PartitionKey, ExplicitHashKey }
+   * @param {Object} [encodedMessage] { Data, PartitionKey }
    */
   sendMessageToKinesis (callback, err, encodedMessage) {
     if (err) callback(err)
@@ -25,7 +25,6 @@ class KinesisFlusher {
     const params = {
       Data: encodedMessage.Data,
       PartitionKey: encodedMessage.PartitionKey,
-      ExplicitHashKey: encodedMessage.ExplicitHashKey,
       StreamName: this.host
     }
 
@@ -45,15 +44,9 @@ class KinesisFlusher {
   call (data, callback) {
     const kinesisMessages = data.batch.map((record) => {
       var pk = (1.0 * Math.random()).toString().replace('.', '')
-      var ehk = (1.0 * Math.random()).toString().replace('.', '')
-
-      while (ehk[0] === '0' && ehk.length > 0) {
-        ehk = ehk.substring(1)
-      }
 
       return {
         'PartitionKey': pk,
-        'ExplicitHashKey': ehk,
         'Data': JSON.stringify(record)
       }
     })
