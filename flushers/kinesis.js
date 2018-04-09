@@ -1,8 +1,7 @@
 'use strict'
 
 const { Kinesis } = require('aws-sdk')
-const RecordAggregator = require('aws-kinesis-agg/RecordAggregator')
-const aggregator = new RecordAggregator()
+const aggregate = require('aws-kinesis-agg').aggregate;
 const noop = () => {}
 
 class KinesisFlusher {
@@ -17,15 +16,12 @@ class KinesisFlusher {
    *
    * @param {Function} [callback]
    * @param {Object} err
-   * @param {Object} [encodedMessage] { Data, PartitionKey, ExplicitHashKey }
+   * @param {Object} [encodedMessage] { Data, PartitionKey }
    */
-  sendMessageToKinesis (callback, err, encodedMessage) {
-    if (err) callback(err)
-
+  sendMessageToKinesis (encodedMessage, callback) {
     const params = {
-      Data: encodedMessage.Data,
-      PartitionKey: encodedMessage.PartitionKey,
-      ExplicitHashKey: encodedMessage.ExplicitHashKey,
+      Data: encodedMessage.data,
+      PartitionKey: encodedMessage.partitionKey,
       StreamName: this.host
     }
 
@@ -45,30 +41,21 @@ class KinesisFlusher {
   call (data, callback) {
     const kinesisMessages = data.batch.map((record) => {
       var pk = (1.0 * Math.random()).toString().replace('.', '')
-      var ehk = (1.0 * Math.random()).toString().replace('.', '')
-
-      while (ehk[0] === '0' && ehk.length > 0) {
-        ehk = ehk.substring(1)
-      }
 
       return {
-        'PartitionKey': pk,
-        'ExplicitHashKey': ehk,
-        'Data': JSON.stringify(record)
+        partitionKey: pk,
+        data: JSON.stringify(record)
       }
     })
 
     // The callback is envoked when the number of records supplied
     // exceeds the Kinesis maximum record size
-    aggregator.aggregateRecords(
+    aggregate(
       kinesisMessages,
-      this.sendMessageToKinesis.bind(this, callback),
+      this.sendMessageToKinesis.bind(this),
       noop,
-      noop
+      callback
     )
-
-    // flush any final messages that were under the emission threshold
-    aggregator.flushBufferedRecords(this.sendMessageToKinesis.bind(this, callback))
   }
 }
 
