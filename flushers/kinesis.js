@@ -27,7 +27,7 @@ class KinesisFlusher {
 
     this.kinesis.putRecord(params, function (err, data) {
       if (err) callback(err)
-      else console.log(data) // callback()
+      else callback()
     })
   }
 
