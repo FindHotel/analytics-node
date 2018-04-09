@@ -1,8 +1,7 @@
 'use strict'
 
 const { Kinesis } = require('aws-sdk')
-const RecordAggregator = require('aws-kinesis-agg/RecordAggregator')
-const aggregator = new RecordAggregator()
+const aggregate = require('aws-kinesis-agg').aggregate;
 const noop = () => {}
 
 class KinesisFlusher {
@@ -19,18 +18,16 @@ class KinesisFlusher {
    * @param {Object} err
    * @param {Object} [encodedMessage] { Data, PartitionKey }
    */
-  sendMessageToKinesis (callback, err, encodedMessage) {
-    if (err) callback(err)
-
+  sendMessageToKinesis (encodedMessage, callback) {
     const params = {
-      Data: encodedMessage.Data,
-      PartitionKey: encodedMessage.PartitionKey,
+      Data: encodedMessage.data,
+      PartitionKey: encodedMessage.partitionKey,
       StreamName: this.host
     }
 
     this.kinesis.putRecord(params, function (err, data) {
       if (err) callback(err)
-      else callback()
+      else console.log(data) // callback()
     })
   }
 
@@ -46,22 +43,19 @@ class KinesisFlusher {
       var pk = (1.0 * Math.random()).toString().replace('.', '')
 
       return {
-        'PartitionKey': pk,
-        'Data': JSON.stringify(record)
+        partitionKey: pk,
+        data: JSON.stringify(record)
       }
     })
 
     // The callback is envoked when the number of records supplied
     // exceeds the Kinesis maximum record size
-    aggregator.aggregateRecords(
+    aggregate(
       kinesisMessages,
-      this.sendMessageToKinesis.bind(this, callback),
+      this.sendMessageToKinesis.bind(this),
       noop,
-      noop
+      callback
     )
-
-    // flush any final messages that were under the emission threshold
-    aggregator.flushBufferedRecords(this.sendMessageToKinesis.bind(this, callback))
   }
 }
 
