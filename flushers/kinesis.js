@@ -1,6 +1,7 @@
 'use strict'
 
 const { Kinesis } = require('aws-sdk')
+const uuid = require('uuid/v4')
 const aggregate = require('aws-kinesis-agg').aggregate;
 const noop = () => {}
 
@@ -40,7 +41,7 @@ class KinesisFlusher {
    */
   call (data, callback) {
     const kinesisMessages = data.batch.map((record) => {
-      var pk = (1.0 * Math.random()).toString().replace('.', '')
+      var pk = uuid()
 
       return {
         partitionKey: pk,
