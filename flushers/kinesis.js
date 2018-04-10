@@ -53,8 +53,8 @@ class KinesisFlusher {
     aggregate(
       kinesisMessages,
       this.sendMessageToKinesis.bind(this),
-      noop,
-      callback
+      callback,
+      noop
     )
   }
 }
