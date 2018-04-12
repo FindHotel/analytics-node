@@ -40,9 +40,8 @@ class KinesisFlusher {
    * @param {Function} [callback]
    */
   call (data, callback) {
+    var pk = uuid()
     const kinesisMessages = data.batch.map((record) => {
-      var pk = uuid()
-
       return {
         partitionKey: pk,
         data: JSON.stringify(record)
